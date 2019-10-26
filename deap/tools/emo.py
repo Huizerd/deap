@@ -227,7 +227,7 @@ def selTournamentUniqueFit(individuals):
     while len(selection) < len(individuals):
         k = min(2 * (len(individuals) - len(selection)), len(fitnesses))
         group = random.sample(fitnesses, k)  # without replacement
-        for j in range(1, len(group), 2):  # TODO: check whether actually until and including G-1
+        for j in xrange(1, len(group), 2):  # TODO: check whether actually until and including G-1
             p = tourn(group[j], group[j+1])
             proposed = [ind for ind in individuals if ind.fitness in p]
             selection.append(random.sample(proposed, 1))
