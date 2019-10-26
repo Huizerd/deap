@@ -142,6 +142,98 @@ def assignCrowdingDist(individuals):
     for i, dist in enumerate(distances):
         individuals[i].fitness.crowding_dist = dist
 
+def assignCrowdingDistFit(individuals):
+    """Assign a crowding distance to each unique fitness instead of individual.
+    Approach taken by Fontin and Parizeau, see [Fortin2013]_.
+
+    .. [Fortin2013] Fortin, Parizeau, "Revisiting the NSGA-II
+    Crowding-Distance Computation", 2013.
+    """
+    if len(individuals) == 0:
+        return
+
+    # Select unique fitnesses
+    # TODO: check whether working
+    fitnesses = []
+    for ind in individuals:
+        if ind.fitness not in fitnesses:
+            fitnesses.append(ind.fitness)
+
+    distances = [0.0] * len(fitnesses)
+    crowd = [(fitness.values, i) for i, fitness in enumerate(fitnesses)]
+
+    nobj = len(fitnesses[0].fitness.values)
+
+    for i in xrange(nobj):
+        crowd.sort(key=lambda element: element[0][i])
+        distances[crowd[0][1]] = float("inf")
+        distances[crowd[-1][1]] = float("inf")
+        if crowd[-1][0][i] == crowd[0][0][i]:
+            continue
+        norm = nobj * float(crowd[-1][0][i] - crowd[0][0][i])
+        for prev, cur, next in zip(crowd[:-2], crowd[1:-1], crowd[2:]):
+            distances[cur[1]] += (next[0][i] - prev[0][i]) / norm
+
+    for i, ind in enumerate(individuals):
+        for j, dist in enumerate(distances):
+            if ind.fitness == fitnesses[j]:
+                individuals[i].fitness = fitnesses[j]
+                individuals[i].fitness.crowding_dist = dist
+
+def selLastFront(individuals, k):
+    fitnesses = []
+    for ind in individuals:
+        if ind.fitness not in fitnesses:
+            fitnesses.append(ind.fitness)
+    fitnesses.sort(key=attrgetter("crowding_dist"), reverse=True)
+    selection = []
+    j = 1
+    while len(selection) < k:
+        current = [ind for ind in individuals if ind.fitness == fitnesses[j]]
+        if current:
+            subsel = random.sample(current, 1)
+            selection.append(subsel)
+            individuals.remove(subsel)  # TODO: does this even work?
+        j = j % len(individuals) + 1  # TODO: is this correct?
+
+def selTournamentUniqueFit(individuals):
+    # Select unique fitnesses
+    # TODO: check whether working
+    fitnesses = []
+    for ind in individuals:
+        if ind.fitness not in fitnesses:
+            fitnesses.append(ind.fitness)
+
+    # Return if all the same fitness
+    if len(fitnesses) == 1:
+        return individuals
+
+    def tourn(ind1, ind2):
+        if ind1.fitness.dominates(ind2.fitness):
+            return ind1
+        elif ind2.fitness.dominates(ind1.fitness):
+            return ind2
+
+        if ind1.fitness.crowding_dist < ind2.fitness.crowding_dist:
+            return ind2
+        elif ind1.fitness.crowding_dist > ind2.fitness.crowding_dist:
+            return ind1
+
+        if random.random() <= 0.5:
+            return ind1
+        return ind2
+
+    selection = []
+    while len(selection) < len(individuals):
+        k = min(2 * (len(individuals) - len(selection)), len(fitnesses))
+        group = random.sample(fitnesses, k)  # without replacement
+        for j in range(1, len(group), 2):  # TODO: check whether actually until and including G-1
+            p = tourn(group[j], group[j+1])
+            proposed = [ind for ind in individuals if ind.fitness in p]
+            selection.append(random.sample(proposed, 1))
+
+    return selection
+
 def selTournamentDCD(individuals, k):
     """Tournament selection based on dominance (D) between two individuals, if
     the two individuals do not interdominate the selection is made
